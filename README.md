@@ -28,7 +28,7 @@ different from ordinary stateless services.
 **GPU:** RTX 5070, 12 GiB VRAM. Roughly 0.9 GiB is permanently held by the
 Windows desktop compositor, so `gpu_memory_utilization` is set to **0.80**
 rather than the 0.90 default — at 0.90 the engine competes with the display
-driver for memory it does not actually have.
+driver for memory that is not actually free.
 
 ### Memory budget
 
@@ -102,9 +102,12 @@ kubectl describe node | grep nvidia.com/gpu    # must report 1
 
 ```bash
 kubectl apply -f manifests/vllm.yaml
-kubectl port-forward svc/vllm 8000:8000
+kubectl port-forward svc/llm-inference 8000:8000
 curl http://localhost:8000/v1/models
 ```
+
+The deliberately misconfigured variant used for the probe experiment below is
+kept alongside it as [`manifests/vllm-broken.yaml`](manifests/vllm-broken.yaml).
 
 ---
 
@@ -133,8 +136,6 @@ deployment is strictly worse.
      TPOT p50/p99, queue depth, and output throughput at each rate.
      Chart it and save to docs/latency-curve.png -->
 
-![Latency vs request rate](docs/latency-curve.png)
-
 | Request rate (req/s) | TTFT p99 | TPOT p99 | Queue depth | Output tok/s |
 | --- | --- | --- | --- | --- |
 | | | | | |
@@ -146,10 +147,7 @@ point where the throughput curve flattens.
 
 **Saturation point:** `[N]` req/s.
 
-**What degrades first, and why.** `[FILL from observation. Expectation: TTFT
-climbs sharply while TPOT stays comparatively flat, because requests queue for
-prefill admission rather than decoding slowly. Record what actually happened,
-including any divergence from that expectation.]`
+**What degrades first, and why.** `[FILL from observation.]`
 
 ### Benchmark methodology
 
@@ -158,51 +156,135 @@ fixed concurrency pool. Closed-loop generators stop issuing new requests while
 blocked on slow responses, which systematically under-reports tail latency —
 the same coordinated-omission problem `wrk2` was written to correct.
 
-Client saturation was ruled out by `[FILL: how you confirmed the load generator
-was not itself the bottleneck]`.
-
-```bash
-[BENCHMARK COMMAND]
-```
+Client saturation was ruled out by `[FILL]`.
 
 ---
 
 ## Failure modes reproduced
 
-Each of these was induced deliberately, observed through the monitoring stack,
-and then fixed.
-
 ### 1. Model load time exceeds the liveness probe threshold
 
 **Configuration.** A default-looking liveness probe —
 `initialDelaySeconds: 30`, `periodSeconds: 10`, `failureThreshold: 3` — which
-declares the container dead 60 seconds after start.
+declares the container dead 50 s after start, against a measured startup of
+163 s.
 
-**Symptom.** `[FILL: restart count, CrashLoopBackOff, describe output]`
+**Symptom.** The container was killed and restarted on a perfectly regular
+110-second cycle, five times before the run was stopped.
 
-<!-- CAPTURE: kubectl describe pod events showing "Liveness probe failed",
-     and kubectl get pods showing the restart counter climbing.
-     Save to docs/crashloop.png -->
-<img width="1107" height="304" alt="image" src="https://github.com/user-attachments/assets/7e867027-a0b7-4501-80d9-a25335f01c64" />
-<img width="1364" height="489" alt="image" src="https://github.com/user-attachments/assets/35e5f7de-584b-46ae-8f20-e90addf9962a" />
+```
+04:04:48  Started
+04:05:18  Liveness probe failed        <- initialDelaySeconds elapsed
+04:05:28  Liveness probe failed
+04:05:38  Liveness probe failed        <- failureThreshold reached
+04:05:38  Killing: failed liveness probe, will be restarted
+```
 
+`Last State: Terminated, Reason: Error, Exit Code: 137` — SIGKILL from the
+kubelet, not a self-inflicted exit.
 
+**Root cause.** Startup takes 163 s; the probe kills at 50 s. The container
+logs show a clean, in-progress load with no errors at the moment of
+termination. The service was healthy; the probe's assumption about startup
+duration was wrong.
 
-**Root cause.** Startup takes 163 s; the probe kills the container at 60 s.
-The container logs show a clean, in-progress load with no errors at the moment
-of termination — the service was healthy, and the probe's assumption about
-startup duration was wrong.
+**Two things the reproduction surfaced that I did not expect:**
 
-<img width="758" height="342" alt="image" src="https://github.com/user-attachments/assets/7d92efab-20aa-4987-8550-b41cf799a60e" />
+*It never entered CrashLoopBackOff.* Each run survived ~110 s — long enough
+that the kubelet's restart back-off never escalated. `kubectl get pods` showed
+`STATUS: Running` throughout. The only signals were the restart counter
+climbing and `READY 0/1`. A permanently broken service that looks healthy in
+the column most people scan is considerably more dangerous than one that
+announces itself as CrashLoopBackOff.
 
-**Fix.** `[FILL: startupProbe with a high failureThreshold — and why that is
-the correct answer rather than simply raising livenessProbe
-initialDelaySeconds. The distinction: startupProbe hands control to
-livenessProbe the moment startup succeeds, whereas a long initialDelay is a
-fixed guess that leaves the container unmonitored for that entire window and
-breaks again the moment the model changes.]`
+*Sixty of those 110 seconds were self-inflicted.* The cycle decomposes into
+~50 s of runtime plus the full `terminationGracePeriodSeconds: 60` — vLLM does
+not respond to SIGTERM while loading the model, so every kill waited out the
+entire grace period before SIGKILL. A setting added for a good reason
+(draining in-flight streaming requests) doubled recovery time in the failure
+case.
 
-### 2. KV cache exhaustion under load
+**Fix.** A `startupProbe` with `periodSeconds: 10, failureThreshold: 30`, and
+`initialDelaySeconds` removed from the liveness probe entirely.
+
+This is not equivalent to setting `initialDelaySeconds: 200`, for three
+reasons:
+
+- **A genuine hang stays visible.** With a long initial delay, nothing watches
+  the container for that entire window. The startupProbe polls throughout and
+  kills once the budget is exhausted.
+- **It survives a model change.** `failureThreshold x periodSeconds` is a
+  ceiling, not a fixed wait. A 7B model taking 400 s needs a new guess under
+  the initialDelay approach; under a budget it does not.
+- **It decouples two goals that `initialDelaySeconds` forces into one
+  parameter** — tolerating slow startup, and detecting death quickly. Because
+  the startupProbe owns the first, liveness can now be aggressive:
+  `periodSeconds: 10, failureThreshold: 3` detects a hang within 30 s.
+
+The handover is driven by startup actually completing rather than by a clock.
+Probe semantics should match the question the probe answers.
+
+**Result.** `READY 1/1` after 185 s with zero restarts. The extra ~22 s over
+the 163 s baseline is probe polling granularity — a 10 s `periodSeconds` means
+readiness can lag actual availability by up to a full period. Smaller periods
+cut that lag at the cost of more probe traffic during startup.
+
+### 2. Rolling update deadlocks on a single GPU
+
+**Symptom.** `kubectl rollout restart` left the new pod `Pending`
+indefinitely.
+
+**Root cause.** The default `RollingUpdate` strategy starts the replacement
+before terminating the incumbent. With one GPU, the old pod holds
+`nvidia.com/gpu: 1` and the new pod cannot be scheduled. The old pod was in a
+restart loop and would never become ready, so the deadlock was permanent.
+
+This is the clearest example in the project of a GPU workload breaking an
+assumption that holds for ordinary stateless services: replicas cannot briefly
+coexist when the resource is exclusive and indivisible.
+
+**Fix.** `strategy.type: Recreate`.
+
+**Tradeoff.** The update window becomes a full cold start — 165 s of zero
+availability. Production would need a spare GPU for blue/green rather than
+accepting that window.
+
+### 3. `VLLM_PORT` collides with Kubernetes service links
+
+**Symptom.** The pod exited at ~33 s on every attempt with:
+
+```
+ValueError: VLLM_PORT 'tcp://10.43.172.217:8000' appears to be a URI.
+This may be caused by a Kubernetes service discovery issue
+```
+
+**Root cause.** Kubernetes injects legacy Docker-link-style environment
+variables for every existing Service: `<SERVICE_NAME>_PORT`,
+`<SERVICE_NAME>_SERVICE_HOST`, and so on. The Service was named `vllm`, so
+pods received `VLLM_PORT=tcp://10.43.172.217:8000`. vLLM reads an environment
+variable of the same name for its own internal port and expects an integer.
+A namespace collision between a Kubernetes legacy feature and application
+configuration.
+
+**Fix.** `enableServiceLinks: false` on the pod spec — modern service
+discovery is DNS, and these variables are dead weight — plus renaming the
+Service to `llm-inference` as defence in depth.
+
+**Why this one was instructive.** The identical configuration ran fine under
+bare Docker. Having built that baseline first made the bisection immediate:
+same image, same args, same GPU, different orchestrator, therefore the
+orchestrator was injecting something. Without it I would have been debugging
+vLLM instead of Kubernetes.
+
+I also initially misread the resulting restart loop as the probe failure I was
+trying to induce — the events did contain `Liveness probe failed`. But the
+container was dying at 33 s when the probe could not act before 50 s, the
+failure count had only reached 2 of 3, and `STATUS: Error` with a `BackOff`
+event indicates a self-exit rather than a kubelet kill. Evidence that
+superficially matches the expected failure mode is not the expected failure
+mode.
+
+### 4. KV cache exhaustion under load
 
 **Symptom.** `[FILL: throughput collapse, preemption counter climbing]`
 
@@ -212,8 +294,6 @@ breaks again the moment the model changes.]`
 **Root cause.** `[FILL]`
 
 **Fix.** `[FILL]`
-
-### 3. `[OPTIONAL — long-prompt prefill blocking decode for other requests]`
 
 ---
 
@@ -238,11 +318,7 @@ ready, the spike it was provisioned for has passed. When scale-up latency
 exceeds the period of the load variation, autoscaling is not a slow solution,
 it is the wrong category of solution.
 
-`[FILL: what to do instead — provisioned headroom sized to peak, predictive
-scaling against a known traffic curve, or queue-depth-driven KEDA with long
-stabilization windows and a warm pool. State which you would pick and why.]`
-
-Full write-up: [`docs/autoscaling.md`](docs/autoscaling.md)
+`[FILL: what to do instead.]`
 
 ---
 
@@ -259,6 +335,8 @@ This is a single-GPU learning environment, not a production deployment.
   dominate the budget.
 - **WSL2, not bare metal.** Required the UVA workaround above; other CUDA
   feature gaps may exist that this project did not surface.
+- **`hostPath` weight cache.** Pins the pod to one node. Acceptable on a single
+  node, wrong anywhere else.
 - **Synthetic load.** Prompt and output length distributions are generated, not
   drawn from production traffic. No shared prefixes, so prefix caching is not
   meaningfully exercised.
@@ -275,11 +353,13 @@ This is a single-GPU learning environment, not a production deployment.
   the Kubernetes Gateway API Inference Extension.
 - **Model weight distribution.** Baking multi-GB weights into images makes
   pulls slow; downloading on every restart is worse. A pre-warmed PVC or a
-  node-local cache is the usual answer, and it attacks the startup-latency
-  problem that breaks autoscaling.
+  node-local cache DaemonSet is the usual answer, and it attacks the
+  startup-latency problem that breaks autoscaling.
 - **Graceful shutdown.** A pod may hold dozens of in-flight streaming
-  generations, each running for tens of seconds. The default 30-second
-  termination grace period is not enough.
+  generations. The 60 s grace period used here is enough to drain them, but as
+  failure mode 1 showed, it also doubles recovery time when the process is not
+  in a state to handle SIGTERM. A preStop hook that refuses new work and drains
+  explicitly would separate those two cases.
 - **Prefill/decode disaggregation.** Splitting the two phases across separate
   GPU pools removes the head-of-line blocking a long prompt causes for everyone
   else — the approach taken by NVIDIA Dynamo and llm-d.
@@ -291,11 +371,11 @@ This is a single-GPU learning environment, not a production deployment.
 ## Repo layout
 
 ```
-manifests/    Kubernetes manifests, ServiceMonitor, Grafana dashboards
+manifests/    Kubernetes manifests (working and deliberately broken)
 bench/        Load generation scripts and raw results
-docs/         Build log, charts, autoscaling write-up
+docs/         Build log, captured evidence, charts
 charts/       Helm chart
 ```
 
-A chronological record of what was tried, what broke, and what the numbers were
-at each step is in [`docs/build-log.md`](docs/build-log.md).
+A chronological record of what was tried, what broke, and the numbers at each
+step is in [`docs/build-log.md`](docs/build-log.md).
