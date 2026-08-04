@@ -193,6 +193,8 @@ The container logs show a clean, in-progress load with no errors at the moment
 of termination — the service was healthy, and the probe's assumption about
 startup duration was wrong.
 
+<img width="758" height="342" alt="image" src="https://github.com/user-attachments/assets/7d92efab-20aa-4987-8550-b41cf799a60e" />
+
 **Fix.** `[FILL: startupProbe with a high failureThreshold — and why that is
 the correct answer rather than simply raising livenessProbe
 initialDelaySeconds. The distinction: startupProbe hands control to
