@@ -179,6 +179,7 @@ declares the container dead 50 s after start, against a measured startup of
 04:05:38  Liveness probe failed        <- failureThreshold reached
 04:05:38  Killing: failed liveness probe, will be restarted
 ```
+<img width="959" height="353" alt="image" src="https://github.com/user-attachments/assets/fff37cfe-20ae-4b8c-a3d5-274b91c12fd7" />
 
 `Last State: Terminated, Reason: Error, Exit Code: 137` — SIGKILL from the
 kubelet, not a self-inflicted exit.
@@ -228,6 +229,9 @@ Probe semantics should match the question the probe answers.
 the 163 s baseline is probe polling granularity — a 10 s `periodSeconds` means
 readiness can lag actual availability by up to a full period. Smaller periods
 cut that lag at the cost of more probe traffic during startup.
+
+<img width="768" height="348" alt="image" src="https://github.com/user-attachments/assets/b3d92684-964a-4db9-8e2a-002eb6412556" />
+
 
 ### 2. Rolling update deadlocks on a single GPU
 
