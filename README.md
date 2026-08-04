@@ -183,6 +183,10 @@ declares the container dead 60 seconds after start.
 <!-- CAPTURE: kubectl describe pod events showing "Liveness probe failed",
      and kubectl get pods showing the restart counter climbing.
      Save to docs/crashloop.png -->
+<img width="1107" height="304" alt="image" src="https://github.com/user-attachments/assets/7e867027-a0b7-4501-80d9-a25335f01c64" />
+<img width="1364" height="489" alt="image" src="https://github.com/user-attachments/assets/35e5f7de-584b-46ae-8f20-e90addf9962a" />
+
+
 
 **Root cause.** Startup takes 163 s; the probe kills the container at 60 s.
 The container logs show a clean, in-progress load with no errors at the moment
