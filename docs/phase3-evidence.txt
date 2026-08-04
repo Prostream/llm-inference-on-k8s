@@ -1,0 +1,9 @@
+    Last State:     Terminated
+      Reason:       Error
+      Exit Code:    137
+      Started:      Mon, 03 Aug 2026 21:12:08 -0700
+      Finished:     Mon, 03 Aug 2026 21:13:58 -0700
+    Ready:          False
+    Restart Count:  5
+    Limits:
+      cpu:             4
