@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  labels:
+    app.kubernetes.io/name: llm-inference
+    app.kubernetes.io/component: inference-server
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:latest
+        imagePullPolicy: IfNotPresent
+        args:
+          - --model
+          - Qwen/Qwen2.5-1.5B-Instruct
+          - --gpu-memory-utilization
+          - "0.80"
+          - --max-model-len
+          - "4096"
+        env:
+        - name: VLLM_USE_V2_MODEL_RUNNER
+          value: "0"
+        ports:
+        - name: http
+          containerPort: 8000
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+            nvidia.com/gpu: 1
+          limits:
+            cpu: "4"
+            memory: 8Gi
+            nvidia.com/gpu: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+          failureThreshold: 1
+        # DELIBERATELY MISCONFIGURED — see docs/build-log.md Phase 3.
+        # Declares the container dead at 30 + 3x10 = 60s, but measured
+        # startup is 163s. Replaced with a startupProbe after the
+        # failure mode is captured.
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+        - name: hf-cache
+          mountPath: /root/.cache/huggingface
+        - name: dshm
+          mountPath: /dev/shm
+      volumes:
+      - name: hf-cache
+        hostPath:
+          path: /home/liucz/.cache/huggingface
+          type: DirectoryOrCreate
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-inference
+spec:
+  selector:
+    app: vllm
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
