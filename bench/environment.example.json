@@ -1,0 +1,12 @@
+{
+  "gpu": "REPLACE with actual GPU and VRAM",
+  "driver": "REPLACE with driver version",
+  "runtime": "REPLACE with Linux/WSL/container runtime versions",
+  "server_image_digest": "REPLACE with immutable image digest",
+  "server_vllm_version": "REPLACE with version reported inside server",
+  "model_revision": "REPLACE with cached Hugging Face snapshot revision",
+  "server_args": "REPLACE with complete effective server arguments",
+  "prefix_cache": "REPLACE with disabled/enabled and cold/warm policy",
+  "client_path": "REPLACE with in-cluster/direct/port-forward and client host",
+  "notes": "REPLACE with desktop GPU use, warmup, and other relevant conditions"
+}

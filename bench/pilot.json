@@ -1,0 +1,13 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "max_model_len": 4096,
+  "num_prompts": 32,
+  "repetitions": 1,
+  "seed": 42,
+  "rates": [1, 4],
+  "workloads": [
+    {"name": "short", "input_tokens": 128, "output_tokens": 128},
+    {"name": "long_prefill", "input_tokens": 2048, "output_tokens": 128},
+    {"name": "long_decode", "input_tokens": 128, "output_tokens": 512}
+  ]
+}

@@ -4,3 +4,5 @@ bench/raw/
 __pycache__/
 *.swp
 *.swo
+environment.local.json
+.local/

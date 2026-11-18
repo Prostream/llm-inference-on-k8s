@@ -1,0 +1,58 @@
+# 项目理解与面试验收
+
+现有部署和历史排障材料，加上本次新增的压测工具，是两个阶段。性能提升、饱和点和混合负载结论仍须实测。代理写的新代码也要由你读懂、运行和解释，才能算你掌握的工作。
+
+## 当前可以如实讲的介绍
+
+“我把项目定位成单 GPU 推理服务的工程实验，研究它和普通 Web 服务在启动、显存与请求调度上的区别。已有部分是 Qwen/vLLM 的 Kubernetes 部署与启动排障；现在补了固定负载、保留原始结果和服务端指标的压测流程，用来验证延迟和吞吐的取舍。完整性能对照尚未完成，所以我还不会声称找到了最优配置或生产瓶颈。”
+
+这是当前阶段的口述结构。先理解，再用自己的话讲；实验做完后用真实发现更新。
+
+## 你具体改了什么
+
+1. 部署层：GPU 资源、Deployment/Service、三种探针、service-link 环境变量冲突、单 GPU 更新约束。对照实际 YAML 指出每个配置的用途。
+2. 测量层：`run_matrix.py` 组合负载、到达率和重复编号，调用官方 vLLM benchmark，保存参数、结果和指标。它不实现推理引擎或调度算法。
+3. 分析层：`summarize.py` 汇总官方字段，保留失败状态和缺失值，不通过减分位数制造阶段耗时。
+4. 实验层：先改变输入/输出长度和到达率观察现象，再固定负载改变一个调度参数。未运行的部分只说“计划验证”。
+
+## 一条请求的路径
+
+客户端 → Service → API 校验与分词 → 调度等待 → prefill 处理输入、建立 KV → decode 逐步生成 → 流式返回 → 结束后回收资源。缓存复用和分块调度会改变中间细节，这张图不是每个版本的精确调用栈。
+
+首字慢可能出在网络、处理、排队或 prefill；生成间隔也可能受调度影响。先讲测量起止点，再讨论原因。
+
+## 核心追问
+
+| 问题 | 回答要点 | 第二层追问 |
+| --- | --- | --- |
+| 为什么 vLLM？ | 研究现成在线推理引擎的批处理、缓存与服务行为；没有实现引擎或做完框架对比 | 哪些能力实际用过，哪些只读过？ |
+| Prefill / decode？ | 处理已知输入与自回归生成的工作不同，必须分别控制输入和输出长度 | 为何固定总 token 数仍不够？ |
+| KV cache？ | 缓存注意力层已有 token 的 K/V，减少后续重复计算，同时消耗显存 | GQA 为什么按 KV heads 算？ |
+| PagedAttention？ | 分块和映射管理缓存，减少浪费并支持共享；不代表无限显存或全部计算消失 | 逻辑 token 顺序与物理位置为何可分离？ |
+| Continuous batching？ | 在迭代中更新活跃请求集合，完成的退出，新请求加入 | 与等待整批最慢请求结束有何区别？ |
+| Chunked prefill？ | 长输入分段，让调度有机会交错其他工作；参数可能改变 TTFT/ITL/吞吐取舍 | 小预算是否总好？哪些变量固定了？ |
+| GPU 利用率够不够？ | 单个指标不能区分排队、批大小、算力与带宽限制 | 预分配显存与活跃 KV 占用有何区别？ |
+| TTFT 上升就是排队？ | 还可能是 prefill、网络或客户端；要看阶段证据并干预 | 为什么不能 p99(TTFT)−p99(prefill)？ |
+| 固定到达率与并发？ | 前者观察外部需求积压，后者会在响应变慢时减少新请求 | 客户端发不出设定速率如何发现？ |
+| 51.54 并发？ | 是缓存 token 数除最大长度的容量比，不是满足延迟目标的并发；完整序列数须取整 | 缓存够了为何仍可能很慢？ |
+| 优化了多少？ | 没有完成对照就没有收益数字；展示已有证据与验证方法 | 哪个结果会推翻假设？ |
+
+原理来源：[PagedAttention](https://arxiv.org/abs/2309.06180)、[调优](https://docs.vllm.ai/en/stable/configuration/optimization/)、[指标](https://docs.vllm.ai/en/stable/usage/metrics/)。概念理解不等于本人实践。
+
+## 把“探针探测了一下”展开成证据链
+
+先描述现象和初始化时间，再检查 events、退出状态和 previous logs，判断是探针触发还是应用自身失败。说明 startup 的初始化预算、readiness 的接流量条件和 liveness 的重启职责。旧记录里的 VLLM_PORT 配置错误是独立故障，不能混成同一根因。
+
+追问：137 证明什么？300 秒够 400 秒启动吗？应用 startup complete 与 Ready 是同一时刻吗？Recreate 牺牲什么？旧记录和新复现各证明什么？
+
+## 代码理解与验收
+
+先读 `build_plan()`，解释长度、速率、seed 和重复次数；再读执行部分，解释为何 shell 成功但 completed 不够仍失败；最后读采集和汇总，解释 missing、失败留证与不自动下瓶颈结论的原因。
+
+自己修改 smoke 输入长度，先运行计划模式并解释每个参数，再到可用环境实测。最终脱稿完成：90 秒介绍、请求链路、一段 YAML、一段压测代码、一份真实结果、两层追问。每项记录“独立讲清／需提示／讲不清”。当前尚未做本人验收。
+
+当前简历表述方向（须本人验证贡献后使用）：
+
+> Built a single-GPU vLLM/Kubernetes lab for Qwen serving, with startup-health separation and configuration-failure analysis; added reproducible workload sweeps and raw metric capture for latency/throughput evaluation.
+
+没有数据前，不写 isolated admission queueing；只有 YAML，不写 implemented Helm chart；没有 dashboard 产物，不写 built Grafana dashboards。实验结果出来后再增加有环境、负载和基线限定的成果。
