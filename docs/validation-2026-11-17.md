@@ -23,7 +23,8 @@ numeric request results, exact commands, status and gzip-compressed metric snaps
 Synthetic generated text was omitted from the public copy for compactness; all
 numeric fields remain. [Checksums](results/2026-11-17/checksums.json) identify the
 original full local JSON and uncompressed metrics. Full raw local data remain in
-`bench/raw/`. Environment metadata and client help/version are saved per batch.
+`bench/raw/`. Environment metadata and client help/version are saved per batch;
+trailing whitespace is normalized in the public help copies only.
 
 ## Observed pilot values
 
