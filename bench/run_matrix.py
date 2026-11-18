@@ -95,6 +95,19 @@ def validate_environment(env):
             raise ValueError(f"record actual environment field: {key}")
 
 
+def cli_help(binary, flags):
+    result = subprocess.run([binary, "bench", "serve", "--help"],
+                            text=True, capture_output=True, check=True, timeout=60)
+    # Recent vLLM versions show a compact argument-group index by default.
+    if any(flag not in result.stdout for flag in flags):
+        result = subprocess.run([binary, "bench", "serve", "--help=all"],
+                                text=True, capture_output=True, check=True, timeout=60)
+    for flag in flags:
+        if flag not in result.stdout:
+            raise ValueError(f"installed benchmark CLI does not advertise {flag}; adapt to its version")
+    return result.stdout
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path(__file__).with_name("smoke.json"))
@@ -129,15 +142,11 @@ def main():
         parser.error("--tokenizer must be an existing local snapshot directory")
     version_run = subprocess.run([args.vllm_bin, "--version"], text=True,
                                  capture_output=True, check=True, timeout=60)
-    help_run = subprocess.run([args.vllm_bin, "bench", "serve", "--help"],
-                              text=True, capture_output=True, check=True, timeout=60)
-    for flag in {x for item in plan for x in item["command"] if x.startswith("--")}:
-        if flag not in help_run.stdout:
-            raise ValueError(f"installed benchmark CLI does not advertise {flag}; adapt to its version")
+    help_text = cli_help(args.vllm_bin, {x for item in plan for x in item["command"] if x.startswith("--")})
     fetch(url + "/health")
     models = fetch(url + "/v1/models")
     batch.mkdir(parents=True, exist_ok=False)
-    (batch / "benchmark-help.txt").write_text(help_run.stdout, encoding="utf-8")
+    (batch / "benchmark-help.txt").write_text(help_text, encoding="utf-8")
     (batch / "client-version.txt").write_text(version_run.stdout + version_run.stderr, encoding="utf-8")
     (batch / "models.json").write_text(models, encoding="utf-8")
     (batch / "manifest.json").write_text(json.dumps({"config": config, "environment": env,

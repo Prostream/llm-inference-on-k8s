@@ -66,6 +66,20 @@ class BenchmarkEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 summary.collect(Path(tmp))
 
+    def test_compact_help_expands_before_rejecting_real_flags(self):
+        replies = [subprocess.CompletedProcess([], 0, "use --help=all"),
+                   subprocess.CompletedProcess([], 0, "--endpoint --save-detailed")]
+        with patch.object(runner.subprocess, "run", side_effect=replies) as mocked:
+            text = runner.cli_help("vllm", {"--endpoint", "--save-detailed"})
+        self.assertIn("--endpoint", text)
+        self.assertEqual(mocked.call_args_list[1].args[0][-1], "--help=all")
+
+    def test_unsupported_cli_flag_is_rejected(self):
+        reply = subprocess.CompletedProcess([], 0, "no matching options")
+        with patch.object(runner.subprocess, "run", return_value=reply):
+            with self.assertRaises(ValueError):
+                runner.cli_help("vllm", {"--unsupported"})
+
     def exercise_execution(self, failure):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
