@@ -77,8 +77,10 @@ def capture_metrics(url, target, stop):
     start = time.monotonic()
     with target.open("w", encoding="utf-8") as f:
         while True:
+            final_snapshot = stop.is_set()
             row = {"utc": datetime.now(timezone.utc).isoformat(),
-                   "elapsed_s": time.monotonic() - start}
+                   "elapsed_s": time.monotonic() - start,
+                   "final_snapshot": final_snapshot}
             try:
                 row["prometheus_text"] = fetch(url + "/metrics")
             except Exception as exc:
@@ -87,7 +89,7 @@ def capture_metrics(url, target, stop):
             f.flush()
             # Capture once more after completion so the final requests are not
             # omitted merely because they finished between polling intervals.
-            if stop.is_set():
+            if final_snapshot:
                 break
             stop.wait(1)
 

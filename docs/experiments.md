@@ -22,6 +22,14 @@ baseline isolation or explicitly account for its state. The official client's
 finite-rate arrival process is recorded by its version/help. The wrapper adds no
 concurrency cap. Completed throughput is not evidence of achieved arrival rate.
 
+The [first pilot](validation-2026-11-17.md) demonstrated why this cache control is
+mandatory: paired seeds reused cached prefixes and changed hit ratios substantially.
+Do not interpret another default-state run as a clean baseline. Inspect interval
+hits/queries with `python bench/metrics_summary.py path/to/metrics.jsonl`; first
+disable caching or verify cache clearing, warm each workload shape, and repeat
+with reordered cells. Cache reset behavior is version-specific and was not tested
+in the pilot.
+
 ## Controlled scheduling comparison
 
 Choose a nontrivial rate from the pilot. With compatible chunked prefill enabled,

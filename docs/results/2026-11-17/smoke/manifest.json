@@ -1,0 +1,82 @@
+{
+  "config": {
+    "benchmark_version": "0.26.0",
+    "random_range_ratio": 0.0,
+    "model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "max_model_len": 4096,
+    "num_prompts": 8,
+    "repetitions": 1,
+    "seed": 42,
+    "rates": [
+      0.5
+    ],
+    "workloads": [
+      {
+        "name": "smoke",
+        "input_tokens": 128,
+        "output_tokens": 32
+      }
+    ]
+  },
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 5070, 12227 MiB",
+    "driver": "616.92",
+    "runtime": "Linux 6.18.33.2-microsoft-standard-WSL2",
+    "server_image_digest": "vllm/vllm-openai@sha256:ffb2d59b1c059a5bd8d781320c9f5189de8293693b7d95da54befddaa54abf52",
+    "server_vllm_version": "0.26.0",
+    "model_revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306 (observed cached snapshot; existing server started without explicit revision)",
+    "server_args": "{\"args\": [\"--model\", \"Qwen/Qwen2.5-1.5B-Instruct\", \"--gpu-memory-utilization\", \"0.80\", \"--max-model-len\", \"4096\"], \"env\": [{\"name\": \"VLLM_USE_V2_MODEL_RUNNER\", \"value\": \"0\"}]}",
+    "prefix_cache": "not explicitly configured in existing deployment; default not verified; exploratory pilot only",
+    "client_path": "separate CPU-only Docker client on same WSL host, host networking to Kubernetes ClusterIP",
+    "notes": "Existing single-GPU service; recent device-admission errors; no server tuning applied. Warmup uses smoke. Same host client may contend."
+  },
+  "plan": [
+    {
+      "id": "smoke-r0.5-rep1",
+      "workload": {
+        "name": "smoke",
+        "input_tokens": 128,
+        "output_tokens": 32
+      },
+      "rate": 0.5,
+      "repetition": 1,
+      "command": [
+        "vllm",
+        "bench",
+        "serve",
+        "--backend",
+        "vllm",
+        "--base-url",
+        "http://10.43.23.86:8000",
+        "--endpoint",
+        "/v1/completions",
+        "--model",
+        "Qwen/Qwen2.5-1.5B-Instruct",
+        "--dataset-name",
+        "random",
+        "--random-input-len",
+        "128",
+        "--random-output-len",
+        "32",
+        "--random-range-ratio",
+        "0.0",
+        "--num-prompts",
+        "8",
+        "--request-rate",
+        "0.5",
+        "--seed",
+        "42",
+        "--ignore-eos",
+        "--save-result",
+        "--save-detailed",
+        "--result-dir",
+        "/work/bench/raw/smoke/20261118T032051.059206Z/smoke-r0.5-rep1",
+        "--result-filename",
+        "result.json",
+        "--tokenizer",
+        "/model-cache/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
+      ]
+    }
+  ],
+  "started_utc": "2026-11-18T03:21:25.428477+00:00"
+}

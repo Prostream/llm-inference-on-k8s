@@ -19,6 +19,7 @@ def module(name):
 
 runner = module("run_matrix")
 summary = module("summarize")
+metrics = module("metrics_summary")
 
 
 class BenchmarkEvidenceTests(unittest.TestCase):
@@ -55,6 +56,19 @@ class BenchmarkEvidenceTests(unittest.TestCase):
         self.config["random_range_ratio"] = 1
         with self.assertRaises(ValueError):
             runner.build_plan(self.config, "http://localhost", "vllm", Path("raw"))
+
+    def test_metric_deltas_do_not_treat_resets_as_measurements(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "metrics.jsonl"
+            rows = [{"prometheus_text": f'vllm:prefix_cache_hits_total{{engine="0"}} {hits}\nvllm:prefix_cache_queries_total{{engine="0"}} {queries}'}
+                    for hits, queries in [(10, 20), (40, 60)]]
+            path.write_text("\n".join(json.dumps(r) for r in rows))
+            data = metrics.summarize(path)
+            self.assertEqual(data["prefix_hit_ratio"], 0.75)
+            self.assertIsNone(data["queue_mean_ms"])
+            rows.reverse()
+            path.write_text("\n".join(json.dumps(r) for r in rows))
+            self.assertIsNone(metrics.summarize(path)["prefix_hit_ratio"])
 
     def test_failure_without_result_is_not_dropped_from_export(self):
         with tempfile.TemporaryDirectory() as tmp:

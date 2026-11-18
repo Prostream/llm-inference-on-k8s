@@ -4,7 +4,7 @@ import csv
 import json
 from pathlib import Path
 
-FIELDS = ["completed", "duration", "request_throughput", "output_throughput",
+FIELDS = ["num_prompts", "completed", "failed", "duration", "request_throughput", "output_throughput",
           "total_output_tokens", "mean_ttft_ms", "median_ttft_ms", "p99_ttft_ms",
           "mean_tpot_ms", "p99_tpot_ms", "mean_itl_ms", "p99_itl_ms"]
 

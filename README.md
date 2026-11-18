@@ -12,12 +12,16 @@ not a production service, a custom inference engine, or a multi-GPU deployment.
 | Deployment | Kubernetes Deployment/Service, GPU request, three health probes | Single-node WSL2/k3s lab |
 | Failure analysis | Historical build notes, exit-state fragment and earlier screenshots | Full logs/events need recapturing for exact causal/timing claims |
 | Memory accounting | Historical allocation numbers and model-based KV calculation | Capacity estimate, not measured serving concurrency |
-| Benchmark tooling | Executable official-CLI wrapper, matrices, metric capture, CSV exporter and tests | Tool validation is separate from GPU performance validation |
-| Performance tuning | Controlled experiment protocol | No capacity or improvement claim until real runs support it |
+| Benchmark tooling | Executable CLI wrapper, metric capture, CSV export; 200 real requests completed | CPU tests and GPU observations are documented separately |
+| Performance study | First pilot exposed prefix-cache contamination in paired comparisons | No capacity or tuning-improvement claim; controls need correction |
 | Prometheus/Grafana | Raw vLLM `/metrics` capture in the wrapper | No provisioned monitoring stack or dashboard in this checkout |
 | Helm/autoscaling | Not implemented here | YAML does not demonstrate a Helm chart or scale-out |
 
 See the [evidence ledger](docs/evidence-ledger.md). Empty results are not findings.
+
+The [first live report](docs/validation-2026-11-17.md) includes raw numeric results
+and metric snapshots. Its main finding is that repeated seeded prompts changed
+cache hit ratios, making apparent latency improvements an invalid rate comparison.
 
 ## Research question
 
@@ -166,6 +170,7 @@ limits and non-cache resources matter. Measure serving behavior separately.
 
 - [Chinese interview walkthrough](docs/interview-guide.zh-CN.md)
 - [Experiment protocol](docs/experiments.md)
+- [Live validation and measured limitations](docs/validation-2026-11-17.md)
 - [Evidence ledger](docs/evidence-ledger.md)
 - [Historical build notes](docs/build-log.md)
 

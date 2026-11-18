@@ -1,0 +1,51 @@
+{
+  "smoke/smoke-r0.5-rep1": {
+    "original_result_sha256": "597e2f0d2f84f36567d116ae658d408f03cd92d88a2ff3a3f03a781672bb43a4",
+    "metrics_jsonl_sha256": "8f00e78f88d2cc058c84def11305d39c94bb0b33d20c6fa48f2037d88c0c0545",
+    "omitted_public_fields": [
+      "generated_texts"
+    ]
+  },
+  "pilot/long_decode-r1-rep1": {
+    "original_result_sha256": "7c8fe4c201687d7e8407c3a9b48c5729cf7d46bf0dae956748f8fc20d6b9878d",
+    "metrics_jsonl_sha256": "efac46cebdee6647a1d0c24418328881afe9628c75f43460c84e09d5193b2492",
+    "omitted_public_fields": [
+      "generated_texts"
+    ]
+  },
+  "pilot/long_decode-r4-rep1": {
+    "original_result_sha256": "7310128b0639f06fc17e8bae12b43b81126cca1e65cc708f5df1879fac6a505f",
+    "metrics_jsonl_sha256": "72827e4a88f70729deda08c7feabec4c4856ee4bf7a1f52c81021aea8126cc7f",
+    "omitted_public_fields": [
+      "generated_texts"
+    ]
+  },
+  "pilot/long_prefill-r1-rep1": {
+    "original_result_sha256": "3db0fc4707c30491485cdcdee7145c2df39de37bf72c1060189606285d6b9511",
+    "metrics_jsonl_sha256": "b7a25820670f76e61c13a288d73fd3b9604cf36ef7c33c13115b6d808b65a7d6",
+    "omitted_public_fields": [
+      "generated_texts"
+    ]
+  },
+  "pilot/long_prefill-r4-rep1": {
+    "original_result_sha256": "09d23ad812d5a672c892fb742a30142cd5548007c7cec6afaa7a02a135cb0f07",
+    "metrics_jsonl_sha256": "4b653626393c2fa0e95af357c7df4ed93fcac4f81f92e93ae65f90be4203aba8",
+    "omitted_public_fields": [
+      "generated_texts"
+    ]
+  },
+  "pilot/short-r1-rep1": {
+    "original_result_sha256": "744caecc432ae018f3b21114feb452282133446f729dc97d471d534e33ea424c",
+    "metrics_jsonl_sha256": "ac450bf0093c8110639ad919f7bc200dc4e4ced06b62686cb0060ebcb94aeca2",
+    "omitted_public_fields": [
+      "generated_texts"
+    ]
+  },
+  "pilot/short-r4-rep1": {
+    "original_result_sha256": "38bacaf1f7d720a9d2a11c8c8e8adc67652552d245fa00b49a55e325af17eed4",
+    "metrics_jsonl_sha256": "62ca976cf7903e6513c92827cf490d072d1a4b98a8ed13ad9859c01e319a74d7",
+    "omitted_public_fields": [
+      "generated_texts"
+    ]
+  }
+}

@@ -13,7 +13,8 @@ of what was complete before the interview or a previously submitted resume.
 | KV capacity | Historical log numbers plus model calculation | Capacity estimate, not serving performance |
 | Admission queueing bottleneck | No full sweep or intervention in original checkout | Unverified; do not claim as established |
 | Helm chart, Grafana dashboard | Absent in original checkout | Not demonstrated |
-| New benchmark tooling | `bench/` and tests | Tool validation is not GPU performance validation |
+| New benchmark tooling | `bench/`, tests and live report | 200 real requests completed in smoke/pilot; CPU tests tracked separately |
+| Cache-state confound | Live hit-counter deltas and seeded workload commands | Reused prefixes invalidate a simple rate-only interpretation |
 | Performance improvement | Requires real controlled runs | Unmeasured until evidence is attached |
 
 Corrections to historical text: 137/Error/BackOff alone do not determine root
@@ -27,3 +28,7 @@ For every run retain immutable image and model revision, actual versions and
 server args, workload lengths/arrival/seed/cache/warmup, raw client results and
 errors, metrics, client location/resources and one-variable comparison controls.
 Preserve failed and adverse results. A plausible explanation is not an observation.
+
+See [first live validation](validation-2026-11-17.md) for measured values, raw data
+and the remaining controls. Initial large TTFT was not explained by the measured
+scheduler queue; its full cause remains unresolved.
