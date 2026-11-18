@@ -1,3 +1,6 @@
+# Deliberate probe-failure experiment. Uses the SAME Deployment name as
+# vllm.yaml and replaces its probe configuration. Apply only in this lab;
+# restore with manifests/vllm.yaml after collecting events and previous logs.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,11 +24,15 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
       - name: vllm
-        image: vllm/vllm-openai:latest
+        image: vllm/vllm-openai@sha256:ffb2d59b1c059a5bd8d781320c9f5189de8293693b7d95da54befddaa54abf52
         imagePullPolicy: IfNotPresent
         args:
           - --model
           - Qwen/Qwen2.5-1.5B-Instruct
+          - --revision
+          - 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+          - --tokenizer-revision
+          - 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
           - --gpu-memory-utilization
           - "0.80"
           - --max-model-len
@@ -52,9 +59,9 @@ spec:
           periodSeconds: 5
           failureThreshold: 1
         # DELIBERATELY MISCONFIGURED — see docs/build-log.md Phase 3.
-        # Declares the container dead at 30 + 3x10 = 60s, but measured
-        # startup is 163s. Replaced with a startupProbe after the
-        # failure mode is captured.
+        # Can fail during slow initialization. Capture actual event times;
+        # do not infer the exact kill time from delay + threshold * period.
+        # Restore the startupProbe configuration after the experiment.
         livenessProbe:
           httpGet:
             path: /health

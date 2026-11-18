@@ -7,10 +7,8 @@ metadata:
     app.kubernetes.io/component: inference-server
 spec:
   replicas: 1
-  # Recreate, not RollingUpdate: the GPU is an exclusive, indivisible
-  # resource, so the replacement pod cannot be scheduled while the
-  # incumbent still holds it. Tradeoff: the update window is a full
-  # cold start (~165s) with zero availability.
+  # This lab allocates its only GPU exclusively. Recreate releases it
+  # before replacement, accepting unavailability during startup.
   strategy:
     type: Recreate
   selector:
@@ -27,26 +25,26 @@ spec:
       # Service named "vllm" made the engine fail at startup. Modern
       # service discovery is DNS; these vars are dead weight.
       enableServiceLinks: false
-      # A streaming generation can run for tens of seconds; the 30s
-      # default is not enough to drain in-flight requests.
+      # Experimental termination budget; safe stream draining is not verified.
       terminationGracePeriodSeconds: 60
       containers:
       - name: vllm
-        image: vllm/vllm-openai:latest
+        image: vllm/vllm-openai@sha256:ffb2d59b1c059a5bd8d781320c9f5189de8293693b7d95da54befddaa54abf52
         imagePullPolicy: IfNotPresent
         args:
           - --model
           - Qwen/Qwen2.5-1.5B-Instruct
-          # 0.80 rather than the 0.90 default: the Windows desktop
-          # compositor holds ~0.9 GiB of the 12 GiB permanently.
+          - --revision
+          - 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+          - --tokenizer-revision
+          - 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+          # Leave headroom for desktop GPU use; measure actual free memory.
           - --gpu-memory-utilization
           - "0.80"
           - --max-model-len
           - "4096"
         env:
-        # The V2 model runner (default since 0.26.0) allocates UVA
-        # buffers, which WSL2's CUDA layer does not expose. The V1
-        # runner is still present, just no longer the default.
+        # Historical WSL workaround; verify behavior in the pinned image.
         - name: VLLM_USE_V2_MODEL_RUNNER
           value: "0"
         ports:
@@ -65,30 +63,23 @@ spec:
             cpu: "4"
             memory: 8Gi
             nvidia.com/gpu: 1
-        # Measured startup is ~163s. The startupProbe grants a 300s
-        # budget and suppresses liveness/readiness until it succeeds;
-        # once it does, it never runs again and hands over immediately.
-        # This is why it is not the same as a large initialDelaySeconds:
-        # the handover is driven by startup actually completing, not by
-        # a clock, so a genuine hang during startup is still caught and
-        # a different model size does not require re-guessing.
+        # Approximate 300s startup budget, based on historical observations.
+        # Re-evaluate for a new model/environment; 400s would exceed it.
         startupProbe:
           httpGet:
             path: /health
             port: http
           periodSeconds: 10
           failureThreshold: 30
-        # Controls traffic, not lifecycle: drop out of the Service
-        # endpoints the moment we cannot serve.
+        # Controls traffic eligibility after probe and endpoint propagation.
         readinessProbe:
           httpGet:
             path: /health
             port: http
           periodSeconds: 5
           failureThreshold: 1
-        # Controls lifecycle, not traffic. Can be aggressive now that
-        # startup is handled separately: death is detected within 30s.
-        # No initialDelaySeconds — the startupProbe covers that window.
+        # Runtime health after startup. Actual restart time also includes
+        # probe scheduling, timeout and termination handling.
         livenessProbe:
           httpGet:
             path: /health
@@ -101,10 +92,8 @@ spec:
         - name: dshm
           mountPath: /dev/shm
       volumes:
-      # Node-local weight cache. Not production-grade: hostPath pins the
-      # pod to one node. A pre-warmed PVC or a cache DaemonSet is the
-      # real answer, and it directly attacks the startup latency that
-      # makes autoscaling unworkable.
+      # Machine-specific node-local cache; hostPath does not pin placement.
+      # A multi-node deployment would need an explicit distribution strategy.
       - name: hf-cache
         hostPath:
           path: /home/liucz/.cache/huggingface

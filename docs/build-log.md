@@ -1,3 +1,7 @@
+> Historical notes, not newly reproduced results. Several causal, timing and
+> version statements need correction; see [evidence ledger](evidence-ledger.md).
+> New benchmark tooling does not establish new GPU performance measurements.
+
 RuntimeError: UVA is not available
 at vllm/v1/worker/gpu/buffer_utils.py -> UvaBuffer.init
 

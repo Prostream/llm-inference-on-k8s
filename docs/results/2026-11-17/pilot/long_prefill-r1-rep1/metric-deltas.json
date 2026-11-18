@@ -1,0 +1,20 @@
+{
+  "snapshots": 43,
+  "scrape_errors": 0,
+  "scope": "aggregate across exposed label sets; this lab serves one model/engine",
+  "queue_seconds": 0.00022098599993114476,
+  "queue_samples": 32.0,
+  "queue_mean_ms": 0.006905812497848274,
+  "prefill_seconds": 3.40359196199978,
+  "prefill_samples": 32.0,
+  "prefill_mean_ms": 106.36224881249312,
+  "decode_seconds": 30.840508861000274,
+  "decode_samples": 32.0,
+  "decode_mean_ms": 963.7659019062586,
+  "server_ttft_seconds": 3.8229002952575684,
+  "server_ttft_samples": 32.0,
+  "server_ttft_mean_ms": 119.46563422679901,
+  "prefix_hits": 4064.0,
+  "prefix_queries": 65536.0,
+  "prefix_hit_ratio": 0.06201171875
+}
