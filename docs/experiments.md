@@ -13,6 +13,10 @@ are proposed settings, not capacity results. Pilot first and refine near the kne
 Increase samples for meaningful tails. Fixed output lengths ignore EOS; verify
 actual returned lengths. Random token traffic does not measure answer quality.
 
+The protocol pins the observed vLLM 0.26.0 benchmark client. Its length range
+ratio is 0 for fixed lengths, not 1 (which is invalid in that version). Preserve
+the full CLI help and verify semantics when changing benchmark versions.
+
 Use matching seeds across configuration comparisons. Disable prefix caching for
 baseline isolation or explicitly account for its state. The official client's
 finite-rate arrival process is recorded by its version/help. The wrapper adds no

@@ -33,6 +33,7 @@ class BenchmarkEvidenceTests(unittest.TestCase):
             cmd = item["command"]
             self.assertNotIn("--max-concurrency", cmd)
             self.assertIn("--save-detailed", cmd)
+            self.assertEqual(cmd[cmd.index("--random-range-ratio") + 1], "0.0")
             self.assertEqual(cmd[cmd.index("--seed") + 1], str(41 + item["repetition"]))
 
     def test_rejects_invalid_experiments(self):
@@ -49,6 +50,21 @@ class BenchmarkEvidenceTests(unittest.TestCase):
         env = json.loads((ROOT / "bench" / "environment.example.json").read_text())
         with self.assertRaises(ValueError):
             runner.validate_environment(env)
+
+    def test_026_rejects_one_as_fixed_length_ratio(self):
+        self.config["random_range_ratio"] = 1
+        with self.assertRaises(ValueError):
+            runner.build_plan(self.config, "http://localhost", "vllm", Path("raw"))
+
+    def test_failure_without_result_is_not_dropped_from_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "command.json").write_text(json.dumps({"workload": {"name": "smoke"}, "rate": 1, "repetition": 1}))
+            (root / "status.json").write_text('{"state":"failed"}')
+            row = summary.collect(root)[0]
+            self.assertEqual(row["status"], "failed")
+            self.assertFalse(row["result_available"])
+            self.assertEqual(row["completed"], "")
 
     def test_missing_metrics_remain_missing_and_failures_remain_visible(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -80,6 +96,23 @@ class BenchmarkEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.cli_help("vllm", {"--unsupported"})
 
+    def test_collector_includes_completion_snapshot(self):
+        class StopAfterFirstInterval:
+            stopped = False
+
+            def is_set(self):
+                return self.stopped
+
+            def wait(self, seconds):
+                self.stopped = True
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "metrics.jsonl"
+            with patch.object(runner, "fetch", side_effect=["counter 0", "counter 8"]):
+                runner.capture_metrics("http://localhost", path, StopAfterFirstInterval())
+            rows = [json.loads(line) for line in path.read_text().splitlines()]
+            self.assertEqual([row["prometheus_text"] for row in rows], ["counter 0", "counter 8"])
+
     def exercise_execution(self, failure):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -92,7 +125,7 @@ class BenchmarkEvidenceTests(unittest.TestCase):
 
             def fake_run(cmd, **kwargs):
                 if cmd[-1] == "--version":
-                    return subprocess.CompletedProcess(cmd, 0, "fixture-version", "")
+                    return subprocess.CompletedProcess(cmd, 0, "0.26.0", "")
                 if cmd[-1] == "--help":
                     return subprocess.CompletedProcess(cmd, 0, help_text)
                 if failure == "timeout":

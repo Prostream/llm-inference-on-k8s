@@ -24,6 +24,9 @@ def positive(value, label, integer=False):
 
 
 def build_plan(config, base_url, binary, output):
+    ratio = config["random_range_ratio"]
+    if isinstance(ratio, bool) or not isinstance(ratio, (int, float)) or not 0 <= ratio < 1:
+        raise ValueError("vLLM 0.26 range ratio must be in [0, 1); zero fixes lengths")
     for key in ("max_model_len", "num_prompts", "repetitions"):
         positive(config[key], key, integer=True)
     if not isinstance(config["seed"], int) or isinstance(config["seed"], bool):
@@ -54,7 +57,7 @@ def build_plan(config, base_url, binary, output):
                "--model", config["model"], "--dataset-name", "random",
                "--random-input-len", str(w["input_tokens"]),
                "--random-output-len", str(w["output_tokens"]),
-               "--random-range-ratio", "1.0", "--num-prompts", str(config["num_prompts"]),
+               "--random-range-ratio", str(ratio), "--num-prompts", str(config["num_prompts"]),
                "--request-rate", str(rate), "--seed", str(config["seed"] + rep),
                "--ignore-eos", "--save-result", "--save-detailed",
                "--result-dir", str(folder), "--result-filename", "result.json"]
@@ -82,8 +85,11 @@ def capture_metrics(url, target, stop):
                 row["scrape_error"] = str(exc)  # Missing is never zero.
             f.write(json.dumps(row) + "\n")
             f.flush()
-            if stop.wait(1):
+            # Capture once more after completion so the final requests are not
+            # omitted merely because they finished between polling intervals.
+            if stop.is_set():
                 break
+            stop.wait(1)
 
 
 def validate_environment(env):
@@ -142,6 +148,9 @@ def main():
         parser.error("--tokenizer must be an existing local snapshot directory")
     version_run = subprocess.run([args.vllm_bin, "--version"], text=True,
                                  capture_output=True, check=True, timeout=60)
+    actual_version = version_run.stdout.strip().splitlines()[-1]
+    if actual_version != config["benchmark_version"]:
+        raise ValueError(f"client version {actual_version} differs from protocol {config['benchmark_version']}; revalidate flag semantics first")
     help_text = cli_help(args.vllm_bin, {x for item in plan for x in item["command"] if x.startswith("--")})
     fetch(url + "/health")
     models = fetch(url + "/v1/models")

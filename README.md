@@ -76,7 +76,10 @@ Validate it against the pinned image and retain the logs.
 
 Python 3.10+ runs the wrapper and tests. Execution additionally needs the
 official `vllm bench serve` CLI and its tokenizer dependencies in the client
-environment. The wrapper checks advertised flags before sending traffic.
+environment. The matrices target the observed vLLM 0.26.0 client. The wrapper
+checks its version and full advertised flags before sending traffic. In this
+version, random range ratio 0 fixes lengths; 1 is invalid. Revalidate semantics
+before changing versions instead of assuming the same flag keeps its meaning.
 
 ```bash
 python -m unittest discover -s tests -v

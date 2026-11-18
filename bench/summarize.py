@@ -11,22 +11,24 @@ FIELDS = ["completed", "duration", "request_throughput", "output_throughput",
 
 def collect(root):
     rows = []
-    for path in sorted(root.rglob("result.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data.get("completed"), int) or "duration" not in data:
+    for path in root.rglob("result.json"):
+        if not path.with_name("command.json").exists():
+            raise ValueError(f"missing run provenance: {path}")
+    for command_path in sorted(root.rglob("command.json")):
+        path = command_path.with_name("result.json")
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        if path.exists() and (not isinstance(data.get("completed"), int) or "duration" not in data):
             raise ValueError(f"unrecognized benchmark result schema: {path}")
-        command_path = path.with_name("command.json")
-        if not command_path.exists():
-            raise ValueError(f"missing run provenance: {command_path}")
         run = json.loads(command_path.read_text(encoding="utf-8"))
         row = {"run": str(path.parent), "workload": run["workload"]["name"],
                "offered_rate": run["rate"], "repetition": run["repetition"]}
         row.update({name: data.get(name, "") for name in FIELDS})
         status_path = path.with_name("status.json")
         row["status"] = json.loads(status_path.read_text(encoding="utf-8")).get("state", "unknown") if status_path.exists() else "unknown"
+        row["result_available"] = path.exists()
         rows.append(row)
     if not rows:
-        raise ValueError("no measured result.json files; run a benchmark first")
+        raise ValueError("no run provenance found; execute a benchmark first")
     return rows
 
 

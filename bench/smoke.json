@@ -1,4 +1,6 @@
 {
+  "benchmark_version": "0.26.0",
+  "random_range_ratio": 0.0,
   "model": "Qwen/Qwen2.5-1.5B-Instruct",
   "max_model_len": 4096,
   "num_prompts": 8,
